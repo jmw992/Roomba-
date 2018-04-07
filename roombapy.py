@@ -17,8 +17,8 @@ data = data.astype(int)
 data2d = np.reshape(data, (30, 900))
 
 numericLabel = np.empty([30, 30])
-invalid = []
-charging = []
+invalid_nodes = []
+charging_nodes = []
 valid_nodes = []
 
 charging_start_label = -1
@@ -34,9 +34,9 @@ def labelNodes():
     for i in range(len(data[0])):
         for j in range(len(data[0][0])):
             if (data[0][i][j] == -1):
-                invalid.append(numericLabel[i][j])
+                invalid_nodes.append(numericLabel[i][j])
             elif (data[0][i][j] == -2):
-                charging.append(numericLabel[i][j])
+                charging_nodes.append(numericLabel[i][j])
             else:
                 valid_nodes.append(numericLabel[i][j])
 
@@ -49,25 +49,29 @@ def buildNeighborArcs(i, j):
     #adding source node to list
     if (numericLabel[i][j] in valid_nodes):
         source_to_sinks_list.append(numericLabel[i][j])
-    if (numericLabel[i][j] in charging):
-        source_to_sinks_list.append(charging_start_label)
+    if (numericLabel[i][j] in charging_nodes):
+        source_to_sinks_list.append(charging_end_label)
 
     #adding sink nodes to list checking in NSEW directions
     if ((i + 1) < len(data)):
         if (numericLabel[i + 1][j] in valid_nodes):
             source_to_sinks_list.append(numericLabel[i + 1][j])
+        elif (numericLabel[i + 1][j] in charging_nodes):
+            source_to_sinks_list.append(charging_end_label)
     if ((j + 1) < len(data)):
         if (numericLabel[i][j + 1] in valid_nodes):
             source_to_sinks_list.append(numericLabel[i][j + 1])
+        elif (numericLabel[i][j + 1] in charging_nodes):
+            source_to_sinks_list.append(charging_end_label)
     if ((i - 1) >= 0):
         if (numericLabel[i - 1][j] in valid_nodes):
             source_to_sinks_list.append(numericLabel[i - 1][j])
+        elif (numericLabel[i - 1][j] in charging_nodes):
+            source_to_sinks_list.append(charging_end_label)
     if ((j - 1) >= 0):
         if (numericLabel[i][j - 1] in valid_nodes):
             source_to_sinks_list.append(numericLabel[i][j - 1])
-
-        if ((numericLabel[i][j - 1] in charging) or (numericLabel[i - 1][j] in charging)):
-            # arc.append(numericLabel[i][j-1])
+        elif ((numericLabel[i][j - 1] in charging_nodes) or (numericLabel[i - 1][j] in charging_nodes)):
             source_to_sinks_list.append(charging_end_label)
     return source_to_sinks_list
 
@@ -77,9 +81,11 @@ for i in range(0, len(data)):
     for j in range(len(data[0])):
         if numericLabel[i][j] in valid_nodes:
             arclist.append(buildNeighborArcs(i, j))
-        if numericLabel[i][j] in charging:
+        if numericLabel[i][j] in charging_nodes:
             print("charging!!!")
             arclist.append(buildNeighborArcs(i, j))
+            # 0 n+1 arc to allow not vacuming
+            arclist[j].append(charging_end_label)
 
 # print(arclist)
 dirtnodelist = []
@@ -112,8 +118,9 @@ for nodeList in arclist:
 sink_source_arc_dict = {}
 for source in source_sink_arc_dict:
     for sink in source_sink_arc_dict[source]:
-        if sink_source_arc_dict.get(sink, 'not_made' == 'not_made'):
-            sink_source_arc_dict[sink] = {source: source_sink_arc_dict[source][sink]}
+        if sink_source_arc_dict.get(sink, 'not_made') == 'not_made':
+            sink_source_arc_dict[sink] = {}
+            sink_source_arc_dict[sink][source] = source_sink_arc_dict[source][sink]
         else:
             sink_source_arc_dict[sink][source] = source_sink_arc_dict[source][sink]
 
@@ -163,6 +170,7 @@ for source in source_sink_arc_dict:
     # constraint 3 : must leave the charging station
     if source ==charging_start_label:
         mdl.add(arc_sum_expression == 1)
+        print("constrint 3 entered")
 
     # constraint 2 : Each tile can be vaumed at most once (can only leave from a tile once)
     else:
@@ -197,6 +205,7 @@ for source in source_sink_arc_dict:
 
 mdl.add(dirt_collected_sum == 1)
 
+
 # constraint 7 : Balance for the dirt on each tile under each scenario
 for source in source_sink_arc_dict:
     if source == charging_start_label or source == charging_end_label:
@@ -213,6 +222,7 @@ for source in source_sink_arc_dict:
 
         mdl.add(scenario_balanced == dirt_amount_dict[scenario][source])
 
+
 # -----------------------------------------------------------------------------
 # Objective function
 # -----------------------------------------------------------------------------
@@ -225,7 +235,7 @@ mdl.add(mdl.minimize(objectiveSum))
 # Solve the Model
 # -----------------------------------------------------------------------------
 print("Solving model....")
-msol = mdl.solve(FailLimit=100000, TimeLimit=100000000000)
+msol = mdl.solve(FailLimit=1000, TimeLimit=100000000)
 
 
 print('done')
