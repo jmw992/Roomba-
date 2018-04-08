@@ -21,7 +21,8 @@ invalid_nodes = []
 charging_nodes = []
 valid_nodes = []
 
-charging_start_label = -1
+
+charging_start_label = -2
 charging_end_label = 900
 
 def labelNodes():
@@ -36,6 +37,7 @@ def labelNodes():
             if (data[0][i][j] == -1):
                 invalid_nodes.append(numericLabel[i][j])
             elif (data[0][i][j] == -2):
+                charging_start_label = numericLabel
                 charging_nodes.append(numericLabel[i][j])
             else:
                 valid_nodes.append(numericLabel[i][j])
@@ -49,8 +51,8 @@ def buildNeighborArcs(i, j):
     #adding source node to list
     if (numericLabel[i][j] in valid_nodes):
         source_to_sinks_list.append(numericLabel[i][j])
-    if (numericLabel[i][j] in charging_nodes):
-        source_to_sinks_list.append(charging_end_label)
+    elif (numericLabel[i][j] in charging_nodes):
+        source_to_sinks_list.append(numericLabel[i][j])
 
     #adding sink nodes to list checking in NSEW directions
     if ((i + 1) < len(data)):
@@ -102,7 +104,7 @@ for i in range(len(data)):
 # -----------------------------------------------------------------------------
 # Initialize the problem data
 # -----------------------------------------------------------------------------
-capacity = 1000
+roomba_dirt_capacity = 1000
 rate_dirt_pickup = 1
 numScenarios = 30
 
@@ -133,7 +135,7 @@ for scenario in range(numScenarios):
     dirt_plusminus_dict[scenario] = {}
     dirt_amount_dict[scenario] = {}
     for nodeList in arclist:
-        if nodeList[0] == charging_end_label or nodeList[0] == charging_start_label:
+        if nodeList[0] == charging_end_label or nodeList[0] in charging_nodes:
             continue
         dirt_plusminus_dict[scenario][int(nodeList[0])] = dirtIndex
         dirt_amount_dict[scenario][int(nodeList[0])] = data2d[scenario][int(nodeList[0])]
@@ -168,30 +170,34 @@ for source in source_sink_arc_dict:
         arc_sum_expression += decision_Arcs[source_sink_arc_dict[source][sink]]
 
     # constraint 3 : must leave the charging station
-    if source ==charging_start_label:
+    if source in charging_nodes:
         mdl.add(arc_sum_expression == 1)
-        print("constrint 3 entered")
+        print("constraint 3 entered")
 
-    # constraint 2 : Each tile can be vaumed at most once (can only leave from a tile once)
+    # constraint 2 : Each tile can be vacumed at most once (can only leave from a tile once)
     else:
         mdl.add(arc_sum_expression <= 1)
 
 # constraint 4 : the arc must return to the charging station
-arc_sum_expression = 0
+end_charging_arcs_sum = 0
 for source in sink_source_arc_dict[charging_end_label]:
-    arc_sum_expression += decision_Arcs[sink_source_arc_dict[charging_end_label][source]]
+    end_charging_arcs_sum += decision_Arcs[sink_source_arc_dict[charging_end_label][source]]
 
-mdl.add(arc_sum_expression == 1)
+mdl.add(end_charging_arcs_sum == 1)
 
 # constraint 5 : the roomba leaves node k, k elment of Tl, if and only if it enters that node
 for tile in source_sink_arc_dict:
     source_arc_sum = 0
     sink_arc_sum = 0
 
-    if(tile == charging_end_label or tile == charging_start_label):
+    if(tile == charging_end_label or tile in charging_nodes):
+        print('constraint 5 charging end label encountered')
         continue
     for sink in source_sink_arc_dict[tile]:
         source_arc_sum += decision_Arcs[source_sink_arc_dict[tile][sink]]
+
+    if tile == 841:
+        print(source_sink_arc_dict[tile])
 
     for source in sink_source_arc_dict[tile]:
         sink_arc_sum += decision_Arcs[sink_source_arc_dict[tile][source]]
@@ -201,14 +207,14 @@ for tile in source_sink_arc_dict:
 dirt_collected_sum = 0
 for source in source_sink_arc_dict:
     for sink in source_sink_arc_dict[source]:
-        dirt_collected_sum += rate_dirt_pickup*decision_Arcs[source_sink_arc_dict[source][sink]]
+        dirt_collected_sum += decision_Arcs[source_sink_arc_dict[source][sink]]
 
-mdl.add(dirt_collected_sum == 1)
-
+mdl.add(rate_dirt_pickup * dirt_collected_sum <= roomba_dirt_capacity)
 
 # constraint 7 : Balance for the dirt on each tile under each scenario
 for source in source_sink_arc_dict:
-    if source == charging_start_label or source == charging_end_label:
+    if (source in charging_nodes) or (source == charging_end_label):
+        print('constraint 7, chargin node skipped')
         continue
     sum_vacumed = 0
     for sink in source_sink_arc_dict[source]:
@@ -216,37 +222,41 @@ for source in source_sink_arc_dict:
     sum_vacumed *= rate_dirt_pickup
 
     for scenario in range(numScenarios):
+        print(source, scenario, dirt_plusminus_dict[scenario][source])
         scenario_balanced = sum_vacumed \
                             + decision_dirt_minus[dirt_plusminus_dict[scenario][source]] \
                             - decision_dirt_plus[dirt_plusminus_dict[scenario][source]]
 
-        mdl.add(scenario_balanced == dirt_amount_dict[scenario][source])
+        #mdl.add(scenario_balanced == dirt_amount_dict[scenario][source])
 
 
 # -----------------------------------------------------------------------------
 # Objective function
 # -----------------------------------------------------------------------------
+'''
 objectiveSum = 0
 for i in range(len(decision_dirt_minus)):
     objectiveSum = decision_dirt_minus[i] + decision_dirt_plus[i]
 
 mdl.add(mdl.minimize(objectiveSum))
+'''
+objectiveSum = 0
+for i in range(len(decision_Arcs)):
+    objectiveSum = decision_Arcs[i]
+
+mdl.add(mdl.maximize(objectiveSum))
+
 # -----------------------------------------------------------------------------
 # Solve the Model
 # -----------------------------------------------------------------------------
 print("Solving model....")
 msol = mdl.solve(FailLimit=1000, TimeLimit=100000000)
 
-
-print('done')
-'''
-for s in range(MAX_SLABS):
-   su = 0
-   for c in allcolors:
-       lo = False
-       for i, o in enumerate(ORDERS):
-           if o.color == c:
-               lo |= (production_slab[i] == s)
-       su += lo
-   mdl.add(su <= MAX_COLOR_PER_SLAB)
-'''
+if msol:
+    print('Solution Found')
+    solution_arc_path = msol[decision_Arcs]
+    solution_dirt_plus = msol[decision_dirt_plus]
+    solution_dirt_minus = msol[decision_dirt_minus]
+    print('Done')
+else:
+    print('No solution Found')
