@@ -191,13 +191,10 @@ for tile in source_sink_arc_dict:
     sink_arc_sum = 0
 
     if(tile == charging_end_label or tile in charging_nodes):
-        print('constraint 5 charging end label encountered')
+        print('constraint 5 charging end label encountered and skipped')
         continue
     for sink in source_sink_arc_dict[tile]:
         source_arc_sum += decision_Arcs[source_sink_arc_dict[tile][sink]]
-
-    if tile == 841:
-        print(source_sink_arc_dict[tile])
 
     for source in sink_source_arc_dict[tile]:
         sink_arc_sum += decision_Arcs[sink_source_arc_dict[tile][source]]
@@ -222,7 +219,6 @@ for source in source_sink_arc_dict:
     sum_vacumed *= rate_dirt_pickup
 
     for scenario in range(numScenarios):
-        print(source, scenario, dirt_plusminus_dict[scenario][source])
         scenario_balanced = sum_vacumed \
                             + decision_dirt_minus[dirt_plusminus_dict[scenario][source]] \
                             - decision_dirt_plus[dirt_plusminus_dict[scenario][source]]
@@ -254,7 +250,10 @@ msol = mdl.solve(FailLimit=1000, TimeLimit=100000000)
 
 if msol:
     print('Solution Found')
-    solution_arc_path = msol[decision_Arcs]
+    solution_arcs = []
+    for i in range(num_arcs):
+         solution_arcs.append(msol[decision_Arcs[i]])
+    print(sum(solution_arcs))
     solution_dirt_plus = msol[decision_dirt_plus]
     solution_dirt_minus = msol[decision_dirt_minus]
     print('Done')
