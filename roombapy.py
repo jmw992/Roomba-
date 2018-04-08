@@ -1,146 +1,27 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Mar 23 13:31:45 2018
-
 @author: aashi
-
 reference model
 https://www.overleaf.com/13967863hyqqhcpsqdsp#/54154245/
 """
 
 from docplex.cp.model import CpoModel
-import numpy as np
+import options
+import dataPrep
 
-data = np.load("master_data.npy")
-data = data.astype(int)
-# to convert above to a 2D array
-data2d = np.reshape(data, (30, 900))
+numScenarios = options.numScenarios
+charging_end_label = options.charging_end_label
+roomba_dirt_capacity = options.roomba_dirt_capacity
+rate_dirt_pickup = options.rate_dirt_pickup
 
-numericLabel = np.empty([30, 30])
-invalid_nodes = []
-charging_nodes = []
-valid_nodes = []
-
-
-charging_start_label = -2
-charging_end_label = 900
-
-def labelNodes():
-    k = 0
-    for i in range(len(data[0])):
-        for j in range(len(data[0])):
-            numericLabel[i][j] = k
-            k = k + 1
-
-    for i in range(len(data[0])):
-        for j in range(len(data[0][0])):
-            if (data[0][i][j] == -1):
-                invalid_nodes.append(numericLabel[i][j])
-            elif (data[0][i][j] == -2):
-                charging_start_label = numericLabel
-                charging_nodes.append(numericLabel[i][j])
-            else:
-                valid_nodes.append(numericLabel[i][j])
-
-
-labelNodes()
-
-
-def buildNeighborArcs(i, j):
-    source_to_sinks_list = []
-    #adding source node to list
-    if (numericLabel[i][j] in valid_nodes):
-        source_to_sinks_list.append(numericLabel[i][j])
-    elif (numericLabel[i][j] in charging_nodes):
-        source_to_sinks_list.append(numericLabel[i][j])
-
-    #adding sink nodes to list checking in NSEW directions
-    if ((i + 1) < len(data)):
-        if (numericLabel[i + 1][j] in valid_nodes):
-            source_to_sinks_list.append(numericLabel[i + 1][j])
-        elif (numericLabel[i + 1][j] in charging_nodes):
-            source_to_sinks_list.append(charging_end_label)
-    if ((j + 1) < len(data)):
-        if (numericLabel[i][j + 1] in valid_nodes):
-            source_to_sinks_list.append(numericLabel[i][j + 1])
-        elif (numericLabel[i][j + 1] in charging_nodes):
-            source_to_sinks_list.append(charging_end_label)
-    if ((i - 1) >= 0):
-        if (numericLabel[i - 1][j] in valid_nodes):
-            source_to_sinks_list.append(numericLabel[i - 1][j])
-        elif (numericLabel[i - 1][j] in charging_nodes):
-            source_to_sinks_list.append(charging_end_label)
-    if ((j - 1) >= 0):
-        if (numericLabel[i][j - 1] in valid_nodes):
-            source_to_sinks_list.append(numericLabel[i][j - 1])
-        elif ((numericLabel[i][j - 1] in charging_nodes) or (numericLabel[i - 1][j] in charging_nodes)):
-            source_to_sinks_list.append(charging_end_label)
-    return source_to_sinks_list
-
-# building 2d list hold lists of [source_node, sink_node1, sink2, sink3...]
-arclist = []
-for i in range(0, len(data)):
-    for j in range(len(data[0])):
-        if numericLabel[i][j] in valid_nodes:
-            arclist.append(buildNeighborArcs(i, j))
-        if numericLabel[i][j] in charging_nodes:
-            print("charging!!!")
-            arclist.append(buildNeighborArcs(i, j))
-            # 0 n+1 arc to allow not vacuming
-            arclist[j].append(charging_end_label)
-
-# print(arclist)
-dirtnodelist = []
-for i in range(len(data)):
-    for j in range(len(data)):
-        if numericLabel[i][j] in valid_nodes:
-            minilist = []
-            minilist.append(numericLabel[i][j])
-            minilist.append(data[i][j])
-            dirtnodelist.append(minilist)
-
-
-
-# -----------------------------------------------------------------------------
-# Initialize the problem data
-# -----------------------------------------------------------------------------
-roomba_dirt_capacity = 1000
-rate_dirt_pickup = 1
-numScenarios = 30
-
-#building dictionary to connect arc source - sink to list position
-arcIndex = 0
-source_sink_arc_dict = {}
-for nodeList in arclist:
-    source_sink_arc_dict[nodeList[0]] = {}
-    for i in range(1, len(nodeList)):
-        source_sink_arc_dict[nodeList[0]][nodeList[i]] = arcIndex
-        arcIndex += 1
-
-sink_source_arc_dict = {}
-for source in source_sink_arc_dict:
-    for sink in source_sink_arc_dict[source]:
-        if sink_source_arc_dict.get(sink, 'not_made') == 'not_made':
-            sink_source_arc_dict[sink] = {}
-            sink_source_arc_dict[sink][source] = source_sink_arc_dict[source][sink]
-        else:
-            sink_source_arc_dict[sink][source] = source_sink_arc_dict[source][sink]
-
-
-# nested dictionary with keys [scenario][node] holding tile Index,
-dirt_plusminus_dict = {}
-dirt_amount_dict = {}
-dirtIndex = 0
-for scenario in range(numScenarios):
-    dirt_plusminus_dict[scenario] = {}
-    dirt_amount_dict[scenario] = {}
-    for nodeList in arclist:
-        if nodeList[0] == charging_end_label or nodeList[0] in charging_nodes:
-            continue
-        dirt_plusminus_dict[scenario][int(nodeList[0])] = dirtIndex
-        dirt_amount_dict[scenario][int(nodeList[0])] = data2d[scenario][int(nodeList[0])]
-        dirtIndex += 1
-
+charging_nodes = dataPrep.charging_nodes
+source_sink_arc_dict = dataPrep.source_sink_arc_dict
+sink_source_arc_dict = dataPrep.sink_source_arc_dict
+dirt_plusminus_dict = dataPrep.dirt_plusminus_dict
+dirt_amount_dict = dataPrep.dirt_amount_dict
+index_arc_dict = dataPrep.index_arc_dict
+num_arcs = dataPrep.num_arcs
 # -----------------------------------------------------------------------------
 # Build the model and variables
 # -----------------------------------------------------------------------------
@@ -148,16 +29,11 @@ for scenario in range(numScenarios):
 # Create CPO model
 mdl = CpoModel()
 
-# x_ij = mdl.binary_var_dict((source, sink) for source in )
-num_arcs = 0
-for arc in arclist:
-    num_arcs = num_arcs + len(arc) - 1
-
-decision_Arcs = mdl.binary_var_list(num_arcs, name='arc')
+decision_Arcs = mdl.binary_var_list(dataPrep.num_arcs, name='arc')
 
 # nested integer_cplex_list for dis+, dis-,
-decision_dirt_plus = mdl.integer_var_list(len(valid_nodes) * numScenarios, min=0, name='dplus')
-decision_dirt_minus = mdl.integer_var_list(len(valid_nodes) * numScenarios, min=0, name='dminus')
+decision_dirt_plus = mdl.integer_var_list(len(dataPrep.valid_nodes) * numScenarios, min=0, name='dplus')
+decision_dirt_minus = mdl.integer_var_list(len(dataPrep.valid_nodes) * numScenarios, min=0, name='dminus')
 
 # -----------------------------------------------------------------------------
 # Build the constraints
@@ -223,39 +99,45 @@ for source in source_sink_arc_dict:
                             + decision_dirt_minus[dirt_plusminus_dict[scenario][source]] \
                             - decision_dirt_plus[dirt_plusminus_dict[scenario][source]]
 
-        #mdl.add(scenario_balanced == dirt_amount_dict[scenario][source])
+        mdl.add(scenario_balanced == dirt_amount_dict[scenario][source])
 
 
 # -----------------------------------------------------------------------------
 # Objective function
 # -----------------------------------------------------------------------------
-'''
+
 objectiveSum = 0
 for i in range(len(decision_dirt_minus)):
-    objectiveSum = decision_dirt_minus[i] + decision_dirt_plus[i]
+    objectiveSum += decision_dirt_minus[i] + decision_dirt_plus[i]
 
 mdl.add(mdl.minimize(objectiveSum))
+
 '''
 objectiveSum = 0
 for i in range(len(decision_Arcs)):
-    objectiveSum = decision_Arcs[i]
+    objectiveSum += decision_Arcs[i]
 
 mdl.add(mdl.maximize(objectiveSum))
-
+'''
 # -----------------------------------------------------------------------------
 # Solve the Model
 # -----------------------------------------------------------------------------
 print("Solving model....")
-msol = mdl.solve(FailLimit=1000, TimeLimit=100000000)
+msol = mdl.solve(TimeLimit = options.solverTimeLimit)
 
 if msol:
     print('Solution Found')
     solution_arcs = []
-    for i in range(num_arcs):
-         solution_arcs.append(msol[decision_Arcs[i]])
+    roomba_path = {}    #will have key: source Value: sink
+    for arcIndex in range(num_arcs):
+        solution_arcs.append(msol[decision_Arcs[arcIndex]])
+        if (solution_arcs[arcIndex] > 0):
+            src_sink_tple = index_arc_dict[arcIndex]
+            roomba_path[src_sink_tple[0]] = src_sink_tple[1]
+
     print(sum(solution_arcs))
-    solution_dirt_plus = msol[decision_dirt_plus]
-    solution_dirt_minus = msol[decision_dirt_minus]
+    # solution_dirt_plus = msol[decision_dirt_plus]
+    # solution_dirt_minus = msol[decision_dirt_minus]
     print('Done')
 else:
     print('No solution Found')
