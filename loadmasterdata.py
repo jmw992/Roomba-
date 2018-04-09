@@ -5,7 +5,7 @@ Created on Fri Mar 16 19:26:43 2018
 @author: aashi
 """
 import numpy as np
-data = np.load("master_data.npy")
+
 
 numericLabel = np.empty([30,30])
 invalid = []

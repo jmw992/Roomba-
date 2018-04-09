@@ -1,19 +1,39 @@
 import numpy as np
 import options
 
-data = np.load(options.dirtFile)
+
+if options.dirtFile[-3:]=='npy':
+    data = np.load(options.dirtFile)
+elif options.dirtFile[-3:]=='csv':
+    data = np.loadtxt(options.dirtFile, delimiter=',')
+
 data = data.astype(int)
 # to convert above to a 2D array
-data2d = np.reshape(data, (30, 900))
+data2d = np.reshape(data, (options.numScenarios, len(data)*len(data[0])))
 
-numericLabel = np.empty([30, 30])
+
+numericLabel = np.empty([len(data), len(data[0])])
 invalid_nodes = []
 charging_nodes = []
 valid_nodes = []
 
 
-charging_start_label = options.charging_start_label
+charging_start_label = options.charging_start_value
 charging_end_label = options.charging_end_label
+
+def orderedPathMaker(path_dict, start_node):
+    path_list = []
+    source = start_node
+
+    while True:
+        sink = path_dict[source]
+        path_list.append((source,sink))
+        if sink == charging_end_label:
+            break
+        else:
+            source = sink
+
+    return path_list
 
 def labelNodes():
     k = 0
@@ -132,3 +152,4 @@ for scenario in range(numScenarios):
 num_arcs = 0
 for arc in arclist:
     num_arcs = num_arcs + len(arc) - 1
+
