@@ -11,4 +11,4 @@ charging_end_label = 900
 
 stochastic_constraints_used = False
 
-solverTimeLimit = 30
+solverTimeLimit = 60

@@ -10,6 +10,7 @@ from docplex.cp.model import CpoModel
 import options
 import dataPrep
 import visualizer
+import subTourEliminator
 
 numScenarios = options.numScenarios
 charging_end_label = options.charging_end_label
@@ -104,6 +105,12 @@ if options.stochastic_constraints_used:
 
             mdl.add(scenario_balanced == dirt_amount_dict[scenario][source])
 
+# constraint 8: Subtour Elimination, for every two connected nodes, must make sure
+# that the sum of nodes leaving the 2 is greater than or equal to, so no cycling occurs
+#constraint 8 subtour eliminator
+expressionList = subTourEliminator.masterSubTourEliminator(dataPrep.data[0,:,:], source_sink_arc_dict, decision_Arcs)
+for expression in expressionList:
+    mdl.add(expression >= 1)
 # -----------------------------------------------------------------------------
 # Objective function
 # -----------------------------------------------------------------------------
@@ -141,8 +148,10 @@ if msol:
             followed_path_dict[src_sink_tple[0]] = src_sink_tple[1]
 
     ordered_Path = dataPrep.orderedPathMaker(followed_path_dict, charging_nodes[0])
+
     visualizer.visualizePath(dataPrep.data[0, :, :], ordered_Path, visualFrequency=1)
     visualizer.visualizeVacuumed(dataPrep.data[0, :, :], followed_path_dict)
+
     print(sum(solution_arcs))
 
     if options.stochastic_constraints_used:
