@@ -49,7 +49,6 @@ def neighborCyclingExprListBuilder(source_sink_dict, dec_arc_lst):
 #handles checking a square of width X and Height Y to make sure it is not
 # check node is bottom corner, will build X and Y rectangle grid from there
 def xByYcyclingExpressionCheck(checkNode, x, y, grid, source_sink_arc_dict, dec_arc_lst, exploredSubtorSets):
-    print('')
     expression = 0
     xByYnodes = {checkNode}
 
@@ -65,6 +64,10 @@ def xByYcyclingExpressionCheck(checkNode, x, y, grid, source_sink_arc_dict, dec_
             # if not a wall or it is the charging station
             if grid[i, j] > 0 or grid[i, j] == options.charging_start_value:
                 xByYnodes.add(ijToNode(i, j, rowjump))
+
+    #if there's only one node or less in a set
+    if len(xByYnodes) <= 1:
+        return expression
 
     xByYnodes = frozenset(xByYnodes)
     #if this subtour has been explored already
@@ -94,13 +97,13 @@ def rectangleCyclingExprListBuilder(grid, source_sink_dict, dec_arc_lst):
     expressionList = []
     for x in range(2, len(grid)):
         for y in range(2, len(grid)):
+            # can't have single node constraints
             expressionList += xByYcyclingExprListBuilder(grid, x, y,
                                                          source_sink_dict, dec_arc_lst, exploredSubtourSets)
 
     return expressionList
 
 def masterSubTourEliminator(grid, source_sink_arc_dict, dec_arc_lst):
-    print('')
     expressionList = []
     trimmedExpressionList = []
     #checking
