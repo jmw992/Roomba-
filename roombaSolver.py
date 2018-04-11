@@ -105,8 +105,9 @@ if options.stochastic_constraints_used:
 
             mdl.add(scenario_balanced == dirt_amount_dict[scenario][source])
 
-# constraint 8: Subtour Elimination, for every two connected nodes, must make sure
-# that the sum of nodes leaving the 2 is greater than or equal to, so no cycling occurs
+# constraint 8: Subtour Elimination, subset, must make sure
+# that the sum of nodes leaving the subest is greater than or equal to one
+# so no cycling occurs
 #constraint 8 subtour eliminator
 expressionList = subTourEliminator.masterSubTourEliminator(dataPrep.data[0,:,:], source_sink_arc_dict, decision_Arcs)
 for expression in expressionList:
@@ -136,6 +137,7 @@ msol = mdl.solve(TimeLimit = options.solverTimeLimit)
 if msol:
     print('Solution Found')
     solution_arcs = []
+    followed_arc_list = []
     sltn_d_plus_list = []
     sltn_d_minus_list = []
     followed_path_dict = {}    #will have key: source Value: sink
@@ -145,6 +147,7 @@ if msol:
         #if the solution arc is selected
         if (solution_arcs[arcIndex] > 0):
             src_sink_tple = index_arc_dict[arcIndex]
+            followed_arc_list.append(src_sink_tple)
             followed_path_dict[src_sink_tple[0]] = src_sink_tple[1]
 
     ordered_Path = dataPrep.orderedPathMaker(followed_path_dict, charging_nodes[0])
