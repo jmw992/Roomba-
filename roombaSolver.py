@@ -11,6 +11,7 @@ import options
 import dataPrep
 import visualizer
 import subTourEliminator
+import subTourGeneration as stg
 
 numScenarios = options.numScenarios
 charging_end_label = options.charging_end_label
@@ -41,7 +42,6 @@ if options.stochastic_constraints_used:
 # -----------------------------------------------------------------------------
 # Build the constraints
 # -----------------------------------------------------------------------------
-
 # constraint 2, 3
 for source in source_sink_arc_dict:
     arc_sum_expression = 0
@@ -109,9 +109,20 @@ if options.stochastic_constraints_used:
 # that the sum of nodes leaving the subest is greater than or equal to one
 # so no cycling occurs
 #constraint 8 subtour eliminator
+'''
 expressionList = subTourEliminator.masterSubTourEliminator(dataPrep.data[0,:,:], source_sink_arc_dict, decision_Arcs)
 for expression in expressionList:
     mdl.add(expression >= 1)
+'''
+subTours = dataPrep.load_obj(options.subTourFile)
+for tour in subTours:
+    expression = 0
+    numArcs = 0
+    for arc in tour:
+        expression += decision_Arcs[source_sink_arc_dict[arc[0]][arc[1]]]
+        numArcs += 1
+    mdl.add(expression < numArcs)
+
 # -----------------------------------------------------------------------------
 # Objective function
 # -----------------------------------------------------------------------------
@@ -152,10 +163,15 @@ if msol:
 
     ordered_Path = dataPrep.orderedPathMaker(followed_path_dict, charging_nodes[0])
 
+    for tple in followed_arc_list:
+        if tple not in ordered_Path:
+            print ('Arc Not in Start End Path : ', tple)
+
     visualizer.visualizePath(dataPrep.data[0, :, :], ordered_Path, visualFrequency=1)
     visualizer.visualizeVacuumed(dataPrep.data[0, :, :], followed_path_dict)
 
     print(sum(solution_arcs))
+
 
     if options.stochastic_constraints_used:
         for i in range(len(decision_dirt_plus)):

@@ -1,6 +1,14 @@
 import numpy as np
 import options
+import pickle
 
+def save_obj(obj, name ):
+    with open('obj/'+ name + '.pkl', 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+def load_obj(name ):
+    with open('obj/' + name + '.pkl', 'rb') as f:
+        return pickle.load(f)
 
 if options.dirtFile[-3:]=='npy':
     data = np.load(options.dirtFile)
@@ -9,10 +17,10 @@ elif options.dirtFile[-3:]=='csv':
 
 data = data.astype(int)
 # to convert above to a 2D array
-data2d = np.reshape(data, (options.numScenarios, len(data)*len(data[0])))
+data2d = np.reshape(data, (options.numScenarios, len(data[0])*len(data[0])))
 
 
-numericLabel = np.empty([len(data), len(data[0])])
+numericLabel = np.empty([len(data[0]), len(data[0])])
 invalid_nodes = []
 charging_nodes = []
 valid_nodes = []
@@ -65,12 +73,12 @@ def buildNeighborArcs(i, j):
         source_to_sinks_list.append(numericLabel[i][j])
 
     #adding sink nodes to list checking in NSEW directions
-    if ((i + 1) < len(data)):
+    if ((i + 1) < len(data[0])):
         if (numericLabel[i + 1][j] in valid_nodes):
             source_to_sinks_list.append(numericLabel[i + 1][j])
         elif (numericLabel[i + 1][j] in charging_nodes):
             source_to_sinks_list.append(charging_end_label)
-    if ((j + 1) < len(data)):
+    if ((j + 1) < len(data[0])):
         if (numericLabel[i][j + 1] in valid_nodes):
             source_to_sinks_list.append(numericLabel[i][j + 1])
         elif (numericLabel[i][j + 1] in charging_nodes):
@@ -85,24 +93,30 @@ def buildNeighborArcs(i, j):
             source_to_sinks_list.append(numericLabel[i][j - 1])
         elif ((numericLabel[i][j - 1] in charging_nodes) or (numericLabel[i - 1][j] in charging_nodes)):
             source_to_sinks_list.append(charging_end_label)
+    if numericLabel[i][j] == 9:
+        print('?')
     return source_to_sinks_list
 
 # building 2d list hold lists of [source_node, sink_node1, sink2, sink3...]
 arclist = []
-for i in range(0, len(data)):
+
+for i in range(0, len(data[0])):
     for j in range(len(data[0])):
         if numericLabel[i][j] in valid_nodes:
             arclist.append(buildNeighborArcs(i, j))
+
+        # 0 n+1 arc to allow not vacuming
         if numericLabel[i][j] in charging_nodes:
             print("charging!!!")
-            arclist.append(buildNeighborArcs(i, j))
-            # 0 n+1 arc to allow not vacuming
-            arclist[j].append(charging_end_label)
+            chargeNeighbors = buildNeighborArcs(i, j)
+            chargeNeighbors.append(charging_end_label)
+            arclist.append(chargeNeighbors)
+
 
 # print(arclist)
 dirtnodelist = []
-for i in range(len(data)):
-    for j in range(len(data)):
+for i in range(len(data[0])):
+    for j in range(len(data[0])):
         if numericLabel[i][j] in valid_nodes:
             minilist = []
             minilist.append(numericLabel[i][j])

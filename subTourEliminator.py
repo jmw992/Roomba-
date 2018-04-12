@@ -1,5 +1,6 @@
 import numpy
 import options
+import dataPrep
 
 def nodeNumToIJ(nodeNum, rowJump):
     i = int(nodeNum/rowJump)

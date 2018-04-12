@@ -31,7 +31,7 @@ def visualizePath(data, path, visualFrequency=5):
             img = pyplot.imshow(grid, interpolation='nearest',
                                         cmap = cmap, norm = norm)
             pyplot.show()
-        print('w')
+    print('Done Charging Start Path')
 def visualizeVacuumed(data, vacuumedArcs):
     grid = np.copy(data)
     maxDirt = np.amax(grid)
@@ -47,4 +47,4 @@ def visualizeVacuumed(data, vacuumedArcs):
     img = pyplot.imshow(grid, interpolation='nearest',
                         cmap=cmap, norm=norm)
     pyplot.show()
-    print('w')
+    print('Done Showing All Vacuumed Path')
