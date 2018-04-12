@@ -16,8 +16,8 @@ def changeDirtLevel(dirtLevel):
 wallLabel = -1
 chargingLabel = -2
 numScenarios = 10
-inputFile = 'small_floor.csv'
-outputFile = 'small_floor10scenarios'
+inputFile = '4by4toy.csv'
+outputFile = '4by4toy_10scenarios'
 
 originalFloor = np.loadtxt(inputFile, delimiter=',')
 
