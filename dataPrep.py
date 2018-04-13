@@ -10,24 +10,6 @@ def load_obj(name ):
     with open('obj/' + name + '.pkl', 'rb') as f:
         return pickle.load(f)
 
-if options.dirtFile[-3:]=='npy':
-    data = np.load(options.dirtFile)
-elif options.dirtFile[-3:]=='csv':
-    data = np.loadtxt(options.dirtFile, delimiter=',')
-
-data = data.astype(int)
-# to convert above to a 2D array
-data2d = np.reshape(data, (options.numScenarios, len(data[0])*len(data[0])))
-
-
-numericLabel = np.empty([len(data[0]), len(data[0])])
-invalid_nodes = []
-charging_nodes = []
-valid_nodes = []
-
-
-charging_start_label = options.charging_start_value
-charging_end_label = options.charging_end_label
 
 def orderedPathMaker(path_dict, start_node):
     path_list = []
@@ -59,10 +41,6 @@ def labelNodes():
                 charging_nodes.append(numericLabel[i][j])
             else:
                 valid_nodes.append(numericLabel[i][j])
-
-
-labelNodes()
-
 
 def buildNeighborArcs(i, j):
     source_to_sinks_list = []
@@ -97,6 +75,32 @@ def buildNeighborArcs(i, j):
         print('?')
     return source_to_sinks_list
 
+
+if options.dirtFile[-3:]=='npy':
+    data = np.load(options.dirtFile)
+elif options.dirtFile[-3:]=='csv':
+    data = np.loadtxt(options.dirtFile, delimiter=',')
+
+data = data.astype(int)
+nodeMeans = data.mean(axis=0).astype(int)
+nodeMeans = np.reshape(nodeMeans, (1, (len(data[0]) * len(data[0]))))
+# to convert above to a 2D array
+if options.average_plan_used:
+    data2d = nodeMeans
+else:
+    data2d = np.reshape(data[:options.numScenarios], (options.numScenarios, len(data[0])*len(data[0])))
+
+numericLabel = np.empty([len(data[0]), len(data[0])])
+invalid_nodes = []
+charging_nodes = []
+valid_nodes = []
+
+
+charging_start_label = options.charging_start_value
+charging_end_label = options.charging_end_label
+
+labelNodes()
+
 # building 2d list hold lists of [source_node, sink_node1, sink2, sink3...]
 arclist = []
 
@@ -115,6 +119,7 @@ for i in range(0, len(data[0])):
 
 # print(arclist)
 dirtnodelist = []
+
 for i in range(len(data[0])):
     for j in range(len(data[0])):
         if numericLabel[i][j] in valid_nodes:
@@ -123,8 +128,7 @@ for i in range(len(data[0])):
             minilist.append(data[i][j])
             dirtnodelist.append(minilist)
 
-oomba_dirt_capacity = options.roomba_dirt_capacity
-rate_dirt_pickup = options.rate_dirt_pickup
+
 numScenarios = options.numScenarios
 
 #building dictionary to connect arc source - sink to list position
@@ -147,11 +151,11 @@ for source in source_sink_arc_dict:
         else:
             sink_source_arc_dict[sink][source] = source_sink_arc_dict[source][sink]
 
-
 # nested dictionary with keys [scenario][node] holding tile Index,
 dirt_plusminus_dict = {}
 dirt_amount_dict = {}
 dirtIndex = 0
+dirtSum = 0
 for scenario in range(numScenarios):
     dirt_plusminus_dict[scenario] = {}
     dirt_amount_dict[scenario] = {}
@@ -160,9 +164,21 @@ for scenario in range(numScenarios):
             continue
         dirt_plusminus_dict[scenario][int(nodeList[0])] = dirtIndex
         dirt_amount_dict[scenario][int(nodeList[0])] = data2d[scenario][int(nodeList[0])]
+        dirtSum += data2d[scenario][int(nodeList[0])]
         dirtIndex += 1
 
-# x_ij = mdl.binary_var_dict((source, sink) for source in )
+#calculate the average dirt level at each node and enter it in as the
+constant_dirt_vacuuming_rate = int(dirtSum / dirtIndex)
+
+vacuumed_Amount_dict = {}
+for nodeList in arclist:
+    if nodeList[0] == charging_end_label or nodeList[0] in charging_nodes:
+        continue
+    if options.constant_vacuuming:
+        vacuumed_Amount_dict[int(nodeList[0])] = constant_dirt_vacuuming_rate
+    else:
+        vacuumed_Amount_dict[int(nodeList[0])] = nodeMeans[0][int(nodeList[0])]
+
 num_arcs = 0
 for arc in arclist:
     num_arcs = num_arcs + len(arc) - 1

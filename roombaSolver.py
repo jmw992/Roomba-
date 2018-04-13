@@ -16,8 +16,9 @@ import subTourGeneration as stg
 numScenarios = options.numScenarios
 charging_end_label = options.charging_end_label
 roomba_dirt_capacity = options.roomba_dirt_capacity
-rate_dirt_pickup = options.rate_dirt_pickup
 
+rate_dirt_pickup = dataPrep.constant_dirt_vacuuming_rate
+vacuumed_at_node= dataPrep.vacuumed_Amount_dict
 charging_nodes = dataPrep.charging_nodes
 source_sink_arc_dict = dataPrep.source_sink_arc_dict
 sink_source_arc_dict = dataPrep.sink_source_arc_dict
@@ -35,9 +36,9 @@ mdl = CpoModel()
 decision_Arcs = mdl.binary_var_list(dataPrep.num_arcs, name='arc')
 
 # nested integer_cplex_list for dis+, dis-,
-if options.stochastic_constraints_used:
-    decision_dirt_plus = mdl.integer_var_list(len(dataPrep.valid_nodes) * numScenarios, min=0, name='dplus')
-    decision_dirt_minus = mdl.integer_var_list(len(dataPrep.valid_nodes) * numScenarios, min=0, name='dminus')
+
+decision_dirt_plus = mdl.integer_var_list(len(dataPrep.valid_nodes) * numScenarios, min=0, name='dplus')
+decision_dirt_minus = mdl.integer_var_list(len(dataPrep.valid_nodes) * numScenarios, min=0, max=1000, name='dminus')
 
 # -----------------------------------------------------------------------------
 # Build the constraints
@@ -82,38 +83,37 @@ for tile in source_sink_arc_dict:
 # constraint 6 : the roomba cannot pickup more dirt than its capacity permits
 dirt_collected_sum = 0
 for source in source_sink_arc_dict:
+    if source in charging_nodes:
+        continue
     for sink in source_sink_arc_dict[source]:
-        dirt_collected_sum += decision_Arcs[source_sink_arc_dict[source][sink]]
-
-mdl.add(rate_dirt_pickup * dirt_collected_sum <= roomba_dirt_capacity)
-
-if options.stochastic_constraints_used:
-# constraint 7 : Balance for the dirt on each tile under each scenario
-    for source in source_sink_arc_dict:
-        if (source in charging_nodes) or (source == charging_end_label):
-            print('constraint 7, chargin node skipped')
+        if sink == charging_end_label:
             continue
-        sum_vacumed = 0
-        for sink in source_sink_arc_dict[source]:
-            sum_vacumed += decision_Arcs[source_sink_arc_dict[source][sink]]
-        sum_vacumed *= rate_dirt_pickup
+        dirt_collected_sum += vacuumed_at_node[source]*decision_Arcs[source_sink_arc_dict[source][sink]]
 
-        for scenario in range(numScenarios):
-            scenario_balanced = sum_vacumed \
-                                + decision_dirt_minus[dirt_plusminus_dict[scenario][source]] \
-                                - decision_dirt_plus[dirt_plusminus_dict[scenario][source]]
+mdl.add(dirt_collected_sum <= roomba_dirt_capacity)
 
-            mdl.add(scenario_balanced == dirt_amount_dict[scenario][source])
+# constraint 7 : Balance for the dirt on each tile under each scenario
+for source in source_sink_arc_dict:
+    if (source in charging_nodes):
+        print('constraint 7, charging node skipped')
+        continue
+    sum_vacumed = 0
+    for sink in source_sink_arc_dict[source]:
+        if(sink == charging_end_label):
+            print('constraint 7, sink node skipped')
+            continue
+        sum_vacumed += decision_Arcs[source_sink_arc_dict[source][sink]] * vacuumed_at_node[source]
+
+    for scenario in range(numScenarios):
+        scenario_balanced = sum_vacumed \
+                            + decision_dirt_minus[dirt_plusminus_dict[scenario][source]] \
+                            - decision_dirt_plus[dirt_plusminus_dict[scenario][source]]
+
+        mdl.add(scenario_balanced == dirt_amount_dict[scenario][source])
 
 # constraint 8: Subtour Elimination, subset, must make sure
 # that the sum of nodes leaving the subest is greater than or equal to one
 # so no cycling occurs
-#constraint 8 subtour eliminator
-'''
-expressionList = subTourEliminator.masterSubTourEliminator(dataPrep.data[0,:,:], source_sink_arc_dict, decision_Arcs)
-for expression in expressionList:
-    mdl.add(expression >= 1)
-'''
 subTours = dataPrep.load_obj(options.subTourFile)
 for tour in subTours:
     expression = 0
@@ -123,21 +123,39 @@ for tour in subTours:
         numArcs += 1
     mdl.add(expression < numArcs)
 
+# constraint 9: Limited time
+# time spent
+time_spent_cleaning = 0
+for source in source_sink_arc_dict:
+    if (source in charging_nodes):
+        print('constraint 9, charging node skipped')
+        time_spent_cleaning += options.time_to_move
+        continue
+    sum_vacumed = 0
+    for sink in source_sink_arc_dict[source]:
+        time_spent_cleaning += decision_Arcs[source_sink_arc_dict[source][sink]] *\
+                               (options.time_to_move + options.time_to_clean*vacuumed_at_node[source])
+
+mdl.add(time_spent_cleaning < options.total_time_to_clean)
+
 # -----------------------------------------------------------------------------
 # Objective function
 # -----------------------------------------------------------------------------
-if options.stochastic_constraints_used:
-    objectiveSum = 0
-    for i in range(len(decision_dirt_minus)):
-        objectiveSum += decision_dirt_minus[i] + decision_dirt_plus[i]
+sum_vacumed = 0
+for source in source_sink_arc_dict:
+    if (source in charging_nodes):
+        continue
+    for sink in source_sink_arc_dict[source]:
+        if (sink == charging_end_label):
+            continue
+        sum_vacumed += decision_Arcs[source_sink_arc_dict[source][sink]]*vacuumed_at_node[source]
 
-    mdl.add(mdl.minimize(objectiveSum))
-else:
-    objectiveSum = 0
-    for i in range(len(decision_Arcs)):
-        objectiveSum += decision_Arcs[i]
+for i in range(len(decision_dirt_minus)):
+    sum_vacumed -= decision_dirt_plus[i]*(1/options.numScenarios)
 
-    mdl.add(mdl.maximize(objectiveSum))
+
+mdl.add(mdl.maximize(sum_vacumed))
+
 
 # -----------------------------------------------------------------------------
 # Solve the Model
@@ -167,16 +185,23 @@ if msol:
         if tple not in ordered_Path:
             print ('Arc Not in Start End Path : ', tple)
 
-    visualizer.visualizePath(dataPrep.data[0, :, :], ordered_Path, visualFrequency=1)
-    visualizer.visualizeVacuumed(dataPrep.data[0, :, :], followed_path_dict)
+    if options.visualizePath:
+        visualizer.visualizePath(dataPrep.data[0, :, :], ordered_Path, visualFrequency=1)
+
+    if options.visualizeVacumed:
+        visualizer.visualizeVacuumed(dataPrep.data[0, :, :], followed_path_dict)
 
     print(sum(solution_arcs))
 
+    dirtVacumed = 0
+    for i in range(len(decision_Arcs)):
+        dirtVacumed += rate_dirt_pickup*msol[decision_Arcs[i]]
 
-    if options.stochastic_constraints_used:
-        for i in range(len(decision_dirt_plus)):
-            sltn_d_plus_list.append(msol[decision_dirt_plus[i]])
-            sltn_d_minus_list.append(msol[decision_dirt_minus])
+    for i in range(len(decision_dirt_plus)):
+        sltn_d_plus_list.append(msol[decision_dirt_plus[i]])
+        sltn_d_minus_list.append(msol[decision_dirt_minus[i]])
+
+    print('Amount Vacumed', dirtVacumed)
     print('Dirt Plus Sum ', sum(sltn_d_plus_list))
     print('Dirt Minus Sum', sum(sltn_d_minus_list))
 
