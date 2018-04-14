@@ -201,10 +201,18 @@ if msol:
         sltn_d_plus_list.append(msol[decision_dirt_plus[i]])
         sltn_d_minus_list.append(msol[decision_dirt_minus[i]])
 
-    print('Amount Vacumed', dirtVacumed)
-    print('Dirt Plus Sum ', sum(sltn_d_plus_list))
-    print('Dirt Minus Sum', sum(sltn_d_minus_list))
-
+    print('Average Plan, ', str(options.average_plan_used))
+    print('Constant Vacuuming, ', str(options.constant_vacuuming))
+    print('Number of Scenarios, ', str(options.numScenarios))
+    print('Number of Nodes Visited, ', len(followed_arc_list))
+    print('Amount Vacumed,', dirtVacumed)
+    print('Dirt Plus Sum, ', sum(sltn_d_plus_list))
+    print('Dirt Minus Sum,', sum(sltn_d_minus_list))
+    print('Total Time to Clean, ', options.total_time_to_clean)
+    print('Time to Move, ', options.time_to_move)
+    print('Time to Clean, ', options.time_to_clean)
+    print('Roomba Dirt Capacity, ', options.roomba_dirt_capacity)
+    print('Dirt File, ', options.dirtFile)
     print('Done')
 else:
     print('No solution Found')

@@ -10,12 +10,13 @@ numScenarios = 10
 # dirtFile = 'data/4by4toy_10scenarios.npy'
 # dirtFile = 'data/5by5floor10scenarios.npy'
 # dirtFile = 'data/6by6floor10scenarios.npy'
-dirtFile = 'data/7by7floor10scenarios.npy'
+# dirtFile = 'data/7by7floor10scenarios.npy'
+dirtFile = 'data/7by7Handmade.npy'
 # dirtFile = 'data/9by9_10scenarios.npy'
 # dirtFile = 'data/small_floor10scenarios.npy'
 
 subTourFile = dirtFile[:-4]
-subTourFile = subTourFile[5:]
+subTourFile = '7by7floor10scenarios'
 
 charging_start_value = -2
 charging_end_label = 900
