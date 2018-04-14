@@ -12,6 +12,7 @@ import dataPrep
 import visualizer
 import subTourEliminator
 import subTourGeneration as stg
+import analyzePathOnScenarios as anlyz
 
 numScenarios = options.numScenarios
 charging_end_label = options.charging_end_label
@@ -191,28 +192,16 @@ if msol:
     if options.visualizeVacumed:
         visualizer.visualizeVacuumed(dataPrep.data[0, :, :], followed_path_dict)
 
-    print(sum(solution_arcs))
-
-    dirtVacumed = 0
-    for i in range(len(decision_Arcs)):
-        dirtVacumed += rate_dirt_pickup*msol[decision_Arcs[i]]
-
-    for i in range(len(decision_dirt_plus)):
-        sltn_d_plus_list.append(msol[decision_dirt_plus[i]])
-        sltn_d_minus_list.append(msol[decision_dirt_minus[i]])
-
-    print('Average Plan, ', str(options.average_plan_used))
-    print('Constant Vacuuming, ', str(options.constant_vacuuming))
-    print('Number of Scenarios, ', str(options.numScenarios))
-    print('Number of Nodes Visited, ', len(followed_arc_list))
+    dirtVacumed, dirtLeftBehind, dirtOverVacuumed = anlyz.analyzePathAcrossScenarios(ordered_Path,
+                                                                                     vacuumed_at_node)
+    print('Average Plan,', str(options.average_plan_used))
+    print('Constant_Vacuming,', str(options.constant_vacuuming))
+    print('Num Scenarios,', options.numScenarios)
+    print('Number of Nodes Visited, ', sum(solution_arcs)-2)
     print('Amount Vacumed,', dirtVacumed)
-    print('Dirt Plus Sum, ', sum(sltn_d_plus_list))
-    print('Dirt Minus Sum,', sum(sltn_d_minus_list))
-    print('Total Time to Clean, ', options.total_time_to_clean)
-    print('Time to Move, ', options.time_to_move)
-    print('Time to Clean, ', options.time_to_clean)
-    print('Roomba Dirt Capacity, ', options.roomba_dirt_capacity)
-    print('Dirt File, ', options.dirtFile)
+    print('Dirt Plus Sum, ', dirtLeftBehind)
+    print('Dirt Minus Sum,', dirtOverVacuumed)
+
     print('Done')
 else:
     print('No solution Found')
